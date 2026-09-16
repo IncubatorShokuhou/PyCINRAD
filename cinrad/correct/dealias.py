@@ -8,6 +8,9 @@ from skimage.restoration import unwrap_phase
 
 def dealias_unwrap_2d(vdata: np.ndarray, nyquist_vel: float) -> np.ndarray:
     """Dealias using 2D phase unwrapping (sweep-by-sweep)."""
+    # Exactly ±nyquist → ±π. Original Cython LJMU counted adjacent +π/-π as one
+    # wrap and was non-deterministic there; do not add a ±π canonicalization
+    # that would invent a reference Cython never stably had.
     scaled_sweep = vdata * np.pi / nyquist_vel
     sweep_mask = np.isnan(vdata)
     scaled_sweep[sweep_mask] = 0

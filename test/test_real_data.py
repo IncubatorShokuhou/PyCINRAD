@@ -16,7 +16,7 @@ from test_align_cython import _assert_vil, _assert_exact, _golden
 
 def test_cinrad_data_contains_no_level2_or_product_files():
     root, found = cinrad_data_radar_files()
-    # cinrad_data v0.1 only ships shapefile/ and font/ (see package layout).
+    # 真实 Z9250 不是 cinrad_data 里的文件：v0.1 只有 shapefile/ 和 font/。
     assert root.is_dir()
     assert (root / "shapefile").is_dir()
     assert (root / "font").is_dir()
@@ -24,6 +24,8 @@ def test_cinrad_data_contains_no_level2_or_product_files():
 
 
 def test_real_z9250_extracted_arrays_match_cython():
+    # real_z9250.npz 由 freeze_cython_goldens.py 从上面那份公开 SA 体扫抽出，
+    # 对照侧路 origin/master Cython 冻结黄金。见 real_sample.py 文件头。
     assert EXTRACTED.is_file(), "missing %s; run test/freeze_cython_goldens.py" % EXTRACTED
     with np.load(EXTRACTED) as z:
         ref = z["ref"]
@@ -72,3 +74,14 @@ def test_real_z9250_via_cinrad_io_matches_extracted_and_cython():
     v5, n5 = extract_vel(vol["reader"], 5)
     _assert_exact(dealias_unwrap_2d(v1, n1), _golden("dealias_z9250_t1"), "dealias_z9250_t1_io")
     _assert_exact(dealias_unwrap_2d(v5, n5), _golden("dealias_z9250_t5"), "dealias_z9250_t5_io")
+
+
+def test_real_z9250_velocity_stays_inside_nyquist():
+    with np.load(EXTRACTED) as z:
+        for vel, nyq in (
+            (z["vel_t1"], float(z["nyq_t1"])),
+            (z["vel_t5"], float(z["nyq_t5"])),
+        ):
+            finite = vel[~np.isnan(vel)]
+            assert finite.size
+            assert np.max(np.abs(finite)) < nyq
