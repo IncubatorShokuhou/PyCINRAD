@@ -22,7 +22,7 @@ copyright = "2025, PyCINRAD Developers"
 author = "PyCINRAD Developers"
 
 # The full version, including alpha/beta/rc tags
-release = "1.9.3"
+release = "1.9.4"
 
 
 # -- General configuration ---------------------------------------------------
