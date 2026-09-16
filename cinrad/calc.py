@@ -162,8 +162,7 @@ def quick_vil(r_list: Volume_T) -> Dataset:
     r"""Calculate vertically integrated liquid.
 
     This algorithm process data in polar coordinates, which avoids the loss of
-    data. Vertically integrated liquid is computed with a NumPy vectorized
-    implementation of the original VIL algorithm.
+    data.
 
     Args:
         r_list (list(xarray.Dataset)): Reflectivity data.
@@ -198,9 +197,6 @@ def quick_vil(r_list: Volume_T) -> Dataset:
 
 def quick_vild(r_list: Volume_T) -> Dataset:
     r"""Calculate vertically integrated liquid density.
-
-    Vertically integrated liquid density is computed with the same NumPy
-    vectorized VIL implementation (`density=True`).
 
     Args:
         r_list (list(xarray.Dataset)): Reflectivity data.
