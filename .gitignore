@@ -11,3 +11,7 @@
 docs/build
 .coverage
 htmlcov
+test/data/*.bin
+test/data/*.BIN
+test/data/*.bz2
+test/data/*.BZ2

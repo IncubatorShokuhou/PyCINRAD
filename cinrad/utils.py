@@ -59,13 +59,8 @@ def vert_integrated_liquid(
     pos_e = np.where(above, idx, -1).max(axis=0)
     dsin = np.diff(np.sin(np.deg2rad(elev)))
     factor = ((z[:-1] + z[1:]) / 2) ** (4 / 7)
-    m1 = (
-        VIL_CONST
-        * factor
-        * dist
-        * dsin[:, None, None]
-        * (np.arange(zshape - 1)[:, None, None] < pos_e)
-    ).sum(axis=0)
+    contrib = VIL_CONST * factor * dist * dsin[:, None, None]
+    m1 = np.where(np.arange(zshape - 1)[:, None, None] < pos_e, contrib, 0).sum(axis=0)
     i = np.arange(xshape)[:, None]
     j = np.arange(yshape)
     ps = np.clip(pos_s, 0, zshape - 1)
