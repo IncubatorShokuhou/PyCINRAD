@@ -1,30 +1,36 @@
 # -*- coding: utf-8 -*-
 # Author: PyCINRAD Developers
 
+import inspect
+
 import numpy as np
 from xarray import Dataset
+from skimage.restoration import unwrap_phase
 
-try:
-    from cinrad.correct._unwrap_2d import unwrap_2d
-except ImportError:
-    from cinrad.error import RadarCalculationError, ExceptionOnCall
+_UNWRAP_PARAMS = inspect.signature(unwrap_phase).parameters
 
-    unwrap_2d = ExceptionOnCall(
-        RadarCalculationError,
-        "Cython is not installed, velocity dealias function cannot be used. If you "
-        "installed Cython after installing cinrad, please re-install cinrad.",
-    )
+
+def _unwrap_2d(image: np.ma.MaskedArray) -> np.ndarray:
+    kwargs = {"wrap_around": (True, False)}
+    if "rng" in _UNWRAP_PARAMS:
+        kwargs["rng"] = 0
+    elif "seed" in _UNWRAP_PARAMS:
+        kwargs["seed"] = 0
+    return np.asarray(unwrap_phase(image, **kwargs))
 
 
 def dealias_unwrap_2d(vdata: np.ndarray, nyquist_vel: float) -> np.ndarray:
     """Dealias using 2D phase unwrapping (sweep-by-sweep)."""
-    scaled_sweep = vdata * np.pi / nyquist_vel
+    scaled_sweep = np.asarray(vdata, dtype=np.float64) * np.pi / nyquist_vel
     sweep_mask = np.isnan(vdata)
+    if scaled_sweep.size == 0:
+        return np.zeros_like(scaled_sweep, dtype=np.float64)
+    if np.all(sweep_mask):
+        return np.zeros_like(scaled_sweep, dtype=np.float64)
+    scaled_sweep = np.array(scaled_sweep, copy=True, order="C")
     scaled_sweep[sweep_mask] = 0
-    wrapped = np.require(scaled_sweep, np.float64, ["C"])
-    mask = np.require(sweep_mask, np.uint8, ["C"])
-    unwrapped = np.empty_like(wrapped, dtype=np.float64, order="C")
-    unwrap_2d(wrapped, mask, unwrapped, [True, False])
+    wrapped = np.ma.array(scaled_sweep, mask=sweep_mask)
+    unwrapped = _unwrap_2d(wrapped)
     return unwrapped * nyquist_vel / np.pi
 
 

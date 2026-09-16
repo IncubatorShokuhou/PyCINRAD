@@ -6,19 +6,25 @@ from typing import Union
 
 import numpy as np
 
-from cinrad.projection import height
 from cinrad._typing import Array_T, Number_T
 
 MODULE_DIR = os.path.dirname(__file__)
 
 VIL_CONST = 3.44e-6
+DEG2RAD = 3.141592653589793 / 180
+RM = 8500
 
 
 def r2z(r: np.ndarray) -> np.ndarray:
     return 10 ** (r / 10)
 
 
-def vert_integrated_liquid_py(
+def _take_along_elev(arr: np.ndarray, index: np.ndarray) -> np.ndarray:
+    xshape, yshape = index.shape
+    return arr[index, np.arange(xshape)[:, None], np.arange(yshape)]
+
+
+def vert_integrated_liquid(
     ref: np.ndarray,
     distance: np.ndarray,
     elev: Array_T,
@@ -45,53 +51,58 @@ def vert_integrated_liquid_py(
     data: numpy.ndarray
         vertically integrated liquid data
     """
-    if density:
-        raise NotImplementedError("VIL density calculation is not implemented")
-    v_beam_width = np.deg2rad(beam_width)
-    elev = np.deg2rad(elev)
-    xshape, yshape = ref[0].shape
-    distance *= 1000
-    hi_arr = distance * np.sin(v_beam_width / 2)
-    vil = _vil_iter(xshape, yshape, ref, distance, elev, hi_arr, threshold)
-    return vil
+    ref = np.asarray(ref, dtype=np.float64)
+    distance = np.asarray(distance, dtype=np.float64)
+    elev = np.asarray(elev, dtype=np.float64)
+    zshape, xshape, yshape = ref.shape
+    vil = np.zeros((xshape, yshape), dtype=np.float64)
+    if zshape == 0 or xshape == 0 or yshape == 0:
+        return vil
+
+    z = r2z(ref)
+    dist = distance * 1000.0
+    hi = dist * np.sin(beam_width * DEG2RAD / 2.0)
+
+    above = ref > threshold
+    valid = np.any(above, axis=0)
+    if not np.any(valid):
+        return vil
+
+    layer = np.arange(zshape, dtype=np.intp)[:, None, None]
+    pos_s = np.where(above, layer, zshape).min(axis=0)
+    pos_e = np.where(above, layer, -1).max(axis=0)
+
+    if zshape >= 2:
+        dsin = np.diff(np.sin(elev * DEG2RAD))
+        ht = dist[None, ...] * dsin[:, None, None]
+        factor = ((z[:-1] + z[1:]) / 2.0) ** (4.0 / 7.0)
+        contrib = VIL_CONST * factor * ht
+        include = np.arange(zshape - 1, dtype=np.intp)[:, None, None] < pos_e[None, ...]
+        m1 = np.where(include, contrib, 0.0).sum(axis=0)
+    else:
+        m1 = np.zeros((xshape, yshape), dtype=np.float64)
+
+    pos_s_clip = np.clip(pos_s, 0, zshape - 1)
+    pos_e_clip = np.clip(pos_e, 0, zshape - 1)
+    z_s = _take_along_elev(z, pos_s_clip)
+    z_e = _take_along_elev(z, pos_e_clip)
+
+    if not density:
+        mb = VIL_CONST * z_s ** (4.0 / 7.0) * hi
+        mt = VIL_CONST * z_e ** (4.0 / 7.0) * hi
+        return np.where(valid, m1 + mb + mt, 0.0)
+
+    same = pos_s == pos_e
+    elev_s = elev[pos_s_clip]
+    elev_e = elev[pos_e_clip]
+    h_lower = distance * np.sin(elev_s * DEG2RAD) + distance ** 2 / (2.0 * RM)
+    h_higher = distance * np.sin(elev_e * DEG2RAD) + distance ** 2 / (2.0 * RM)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        vild = m1 / (h_higher - h_lower)
+    return np.where(valid, np.where(same, 0.0, vild), 0.0)
 
 
-def _vil_iter(
-    xshape: int,
-    yshape: int,
-    ref: np.ndarray,
-    distance: np.ndarray,
-    elev: Array_T,
-    hi_arr: np.ndarray,
-    threshold: Number_T,
-) -> np.ndarray:
-    # r = np.clip(ref, None, 55) #reduce the influence of hails
-    r = ref
-    z = r2z(r)
-    VIL = np.zeros((xshape, yshape))
-    for i in range(xshape):
-        for j in range(yshape):
-            vert_r = r[:, i, j]
-            vert_z = z[:, i, j]
-            dist = distance[i][j]
-            position = np.where(vert_r > threshold)[0]
-            if position.shape[0] == 0:
-                continue
-            pos_s = position[0]
-            pos_e = position[-1]
-            m1 = 0
-            hi = hi_arr[i][j]
-            for l in range(pos_e):
-                ht = dist * (np.sin(elev[l + 1]) - np.sin(elev[l]))
-                factor = ((vert_z[l] + vert_z[l + 1]) / 2) ** (4 / 7)
-                m1 += VIL_CONST * factor * ht
-            mb = VIL_CONST * vert_z[pos_s] ** (4 / 7) * hi
-            mt = VIL_CONST * vert_z[pos_e] ** (4 / 7) * hi
-            VIL[i][j] = m1 + mb + mt
-    return VIL
-
-
-def echo_top_py(
+def echo_top(
     ref: np.ndarray,
     distance: np.ndarray,
     elev: Array_T,
@@ -111,8 +122,6 @@ def echo_top_py(
         elevation angles in degree
     radarheight: int or float
         height of radar
-    drange: float or int
-        range of data to be calculated
     threshold: float
         minimum value of reflectivity to be taken into calculation
 
@@ -121,43 +130,43 @@ def echo_top_py(
     data: numpy.ndarray
         echo tops data
     """
-    xshape, yshape = ref[0].shape
-    et = np.zeros((xshape, yshape))
-    h_ = list()
-    for i in elev:
-        h = height(distance, i, radarheight)
-        h_.append(h)
-    hght = np.concatenate(h_).reshape(ref.shape)
-    for i in range(xshape):
-        for j in range(yshape):
-            vert_h = hght[:, i, j]
-            vert_r = ref[:, i, j]
-            if vert_r.max() < threshold:  # Vertical points don't satisfy threshold
-                et[i][j] = 0
-                continue
-            elif vert_r[-1] >= threshold:  # Point in highest scan exceeds threshold
-                et[i][j] = vert_h[-1]
-                continue
-            else:
-                position = np.where(vert_r >= threshold)[0]
-                if position[-1] == 0:
-                    et[i][j] = vert_h[0]
-                    continue
-                else:
-                    pos = position[-1]
-                    z1 = vert_r[pos]
-                    z2 = vert_r[pos + 1]
-                    h1 = vert_h[pos]
-                    h2 = vert_h[pos + 1]
-                    w1 = (z1 - threshold) / (z1 - z2)
-                    w2 = 1 - w1
-                    et[i][j] = w1 * h2 + w2 * h1
-    return et
+    ref = np.asarray(ref, dtype=np.float64)
+    distance = np.asarray(distance, dtype=np.float64)
+    elev = np.asarray(elev, dtype=np.float64)
+    zshape, xshape, yshape = ref.shape
+    et = np.zeros((xshape, yshape), dtype=np.float64)
+    if zshape == 0 or xshape == 0 or yshape == 0:
+        return et
+
+    hght = (
+        distance[None, ...] * np.sin(elev[:, None, None] * DEG2RAD)
+        + distance[None, ...] ** 2 / (2.0 * RM)
+        + radarheight
+    )
+    above = ref >= threshold
+    valid = np.any(above, axis=0)
+    layer = np.arange(zshape, dtype=np.intp)[:, None, None]
+    pos = np.where(above, layer, -1).max(axis=0)
+    highest = ref[-1] >= threshold
+    pos0 = pos == 0
+
+    if zshape == 1:
+        interp = hght[0]
+    else:
+        pos_clip = np.clip(pos, 0, zshape - 2)
+        z1 = _take_along_elev(ref, pos_clip)
+        z2 = _take_along_elev(ref, pos_clip + 1)
+        h1 = _take_along_elev(hght, pos_clip)
+        h2 = _take_along_elev(hght, pos_clip + 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            w1 = (z1 - threshold) / (z1 - z2)
+        interp = w1 * h2 + (1.0 - w1) * h1
+
+    return np.where(
+        ~valid, 0.0, np.where(highest, hght[-1], np.where(pos0, hght[0], interp))
+    )
 
 
-try:
-    from cinrad._utils import *
-except ImportError:
-    # When the C-extension doesn't exist, define the functions in Python.
-    echo_top = echo_top_py
-    vert_integrated_liquid = vert_integrated_liquid_py
+# Backward-compatible aliases (previously the pure-Python fallbacks).
+vert_integrated_liquid_py = vert_integrated_liquid
+echo_top_py = echo_top
