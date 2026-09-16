@@ -160,7 +160,7 @@ def echo_top(
         h2 = _take_along_elev(hght, pos_clip + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
             w1 = (z1 - threshold) / (z1 - z2)
-        interp = w1 * h2 + (1.0 - w1) * h1
+            interp = w1 * h2 + (1.0 - w1) * h1
 
     return np.where(
         ~valid, 0.0, np.where(highest, hght[-1], np.where(pos0, hght[0], interp))

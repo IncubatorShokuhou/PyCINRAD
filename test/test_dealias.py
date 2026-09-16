@@ -85,10 +85,10 @@ def test_dealias_dataset_masks_nan():
         attrs={"nyquist_vel": nyq},
     )
     out = dealias(ds)
-    result = np.ma.asanyarray(out["VEL"].values)
-    assert np.array_equal(np.ma.getmaskarray(result), np.isnan(vdata))
+    result = np.asarray(out["VEL"].values)
+    assert np.array_equal(np.isnan(result), np.isnan(vdata))
     finite = ~np.isnan(vdata)
-    assert np.allclose(np.asarray(result)[finite], dealias_unwrap_2d(vdata, nyq)[finite])
+    assert np.allclose(result[finite], dealias_unwrap_2d(vdata, nyq)[finite])
 
 
 def test_dealias_all_nan_is_masked_zeros():
