@@ -107,30 +107,27 @@ def echo_top(
     distance = np.asarray(distance, dtype=np.float64)
     elev = np.asarray(elev, dtype=np.float64)
     zshape, xshape, yshape = ref.shape
-    hght = (
-        distance * np.sin(np.deg2rad(elev)[:, None, None])
-        + distance ** 2 / (2 * RM)
-        + radarheight
-    )
+    sin_e = np.sin(np.deg2rad(elev))
+    r2 = distance ** 2 / (2 * RM)
     above = ref >= threshold
-    idx = np.arange(zshape)[:, None, None]
-    pos = np.where(above, idx, -1).max(axis=0)
+    h0 = distance * sin_e[0] + r2 + radarheight
+    if zshape == 1:
+        return np.where(above[0], h0, 0)
+    pos = zshape - 1 - above[::-1].argmax(axis=0)
+    pos_c = np.minimum(pos, zshape - 2)
     i = np.arange(xshape)[:, None]
     j = np.arange(yshape)
-    if zshape == 1:
-        interp = hght[0]
-    else:
-        pos_c = np.clip(pos, 0, zshape - 2)
-        z1 = ref[pos_c, i, j]
-        z2 = ref[pos_c + 1, i, j]
-        h1 = hght[pos_c, i, j]
-        h2 = hght[pos_c + 1, i, j]
-        w1 = (z1 - threshold) / (z1 - z2)
-        interp = w1 * h2 + (1 - w1) * h1
+    z1 = ref[pos_c, i, j]
+    z2 = ref[pos_c + 1, i, j]
+    h1 = distance * sin_e[pos_c] + r2 + radarheight
+    h2 = distance * sin_e[pos_c + 1] + r2 + radarheight
+    w1 = (z1 - threshold) / (z1 - z2)
+    interp = w1 * h2 + (1 - w1) * h1
+    hlast = distance * sin_e[-1] + r2 + radarheight
     return np.where(
         ~above.any(axis=0),
         0,
-        np.where(ref[-1] >= threshold, hght[-1], np.where(pos == 0, hght[0], interp)),
+        np.where(above[-1], hlast, np.where(pos == 0, h0, interp)),
     )
 
 
