@@ -14,6 +14,19 @@ def _golden(name):
         return data[name]
 
 
+def test_exact_nyquist_unwrap_is_deterministic():
+    # 原版 Cython 在 v=±nyq 上多次运行可差 2*nyq；这边只要求 scikit-image 确定。
+    nyq = 27.0
+    v = np.zeros((48, 64), dtype=np.float64)
+    v[:, :] = nyq
+    v[::2] = -nyq
+    v[10:16, 20:30] = 0.0
+    v[0, 0] = np.nan
+    first = dealias_unwrap_2d(v, nyq)
+    for _ in range(4):
+        assert np.array_equal(dealias_unwrap_2d(v, nyq), first, equal_nan=True)
+
+
 def test_dealias_dataset_nan_mask():
     vdata, nyq = vel_nanmask()
     ds = Dataset(

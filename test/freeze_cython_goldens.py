@@ -53,6 +53,7 @@ def main():
         vdata, nyq = factory()
         out["dealias_" + name] = cython_dealias_unwrap_2d(unwrap, vdata, nyq)
 
+    # 公开 SA 样本，不是 cinrad_data。来源见 real_sample.py。
     sample = ensure_sample_file()
     vol = extract_volume(sample)
     ref, dist, elev = vol["ref"], vol["dist"], vol["elev"]

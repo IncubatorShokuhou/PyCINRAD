@@ -1,4 +1,16 @@
-# Locate / download a public CINRAD Level2 sample and extract arrays via cinrad.io.
+# 对齐测试用的真实 SA 体扫。cinrad_data v0.1 只带 shapefile/ 和 font/，没有 Level2，
+# 所以不能从本仓库依赖里拿雷达基数据。
+#
+# 文件：Z_RADR_I_Z9250_20160701001000_O_DOR_SA_CAP.bin
+#   Z9250              站号（CinradReader 读出 site_code/site_name=Z9250；
+#                      这份样本头里经纬度和天线高度是 0，不能当站点坐标用）
+#   20160701001000     体扫时间；读出 scantime 为 2016-07-01 00:10:05 UTC
+#   O_DOR_SA_CAP       老格式 SA 型多普勒基数据体扫（VCP21）
+# 来源：uniquezhiyuan/PyRadar 仓库根目录的公开样本，不是业务归档、也不是 cinrad_data。
+#   https://github.com/uniquezhiyuan/PyRadar
+#   raw: .../raw/master/Z_RADR_I_Z9250_20160701001000_O_DOR_SA_CAP.bin
+# 抽出数组缓存在 golden/real_z9250.npz：REF (9,361,230)，VEL 用仰角序号 1 和 5，
+# 奈奎斯特速度 27 m/s，实测速度落在 [-26.5, 26.5]，没有整片卡在 ±27。
 import os
 import urllib.request
 from pathlib import Path
@@ -10,7 +22,6 @@ SAMPLE_URL = (
     "https://github.com/uniquezhiyuan/PyRadar/raw/master/"
     "Z_RADR_I_Z9250_20160701001000_O_DOR_SA_CAP.bin"
 )
-# same naming family as example/*.ipynb (Z_RADR_I_*_O_DOR_SA_CAP)
 EXTRACTED = Path(__file__).parent / "golden" / "real_z9250.npz"
 
 RADAR_SUFFIXES = {".bin", ".bz2", ".gz", ".dat", ".raw", ".AR2", ".IQ", ".bz"}

@@ -345,7 +345,12 @@ def vel_stripe_nan():
 
 
 def vel_nyqedge():
-    # stay inside (-nyq, nyq); exactly ±nyq is ±π and unwrap branch is ambiguous
+    # 用 0.999*nyq，不要用正好 ±nyq。
+    # v=±nyq 映射成相位 ±π。原版 Cython LJMU 的 wrap/find_wrap 用严格 >PI / <-PI，
+    # 相邻 +π 和 -π 差值是 2π，会被当成差一圈；等可靠度边的 quicker_sort 不稳定，
+    # 同一输入多次运行结果能差 2*nyq。scikit-image 是确定的，但跟哪一次 Cython 对齐
+    # 没有唯一定义。真实基数据速度量化在开区间里（Z9250 这份是 ±26.5，nyq=27），
+    # 所以生产路径不额外做 ±π 归一——原版 Cython 本身就有这个问题。
     nyq = 27.0
     v = np.zeros((48, 64), dtype=np.float64)
     v[:, :] = 0.999 * nyq
