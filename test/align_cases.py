@@ -345,10 +345,11 @@ def vel_stripe_nan():
 
 
 def vel_nyqedge():
+    # stay inside (-nyq, nyq); exactly ±nyq is ±π and unwrap branch is ambiguous
     nyq = 27.0
     v = np.zeros((48, 64), dtype=np.float64)
-    v[:, :] = nyq
-    v[::2] = -nyq
+    v[:, :] = 0.999 * nyq
+    v[::2] = -0.999 * nyq
     v[10:16, 20:30] = 0.0
     v[0, 0] = np.nan
     return _c64(v), nyq
