@@ -109,12 +109,15 @@ def echo_top(
     zshape, xshape, yshape = ref.shape
     sin_e = np.sin(np.deg2rad(elev))
     r2 = distance ** 2 / (2 * RM)
-    above = ref >= threshold
     h0 = distance * sin_e[0] + r2 + radarheight
     if zshape == 1:
-        return np.where(above[0], h0, 0)
-    pos = zshape - 1 - above[::-1].argmax(axis=0)
-    pos_c = np.minimum(pos, zshape - 2)
+        return np.where(ref[0] >= threshold, h0, 0)
+    bits = np.zeros(distance.shape, dtype=np.uint64)
+    for k in range(zshape):
+        bits |= (ref[k] >= threshold) * np.uint64(1 << k)
+    pos = np.log2(np.maximum(bits, 1)).astype(np.intp)
+    pos[bits == 0] = -1
+    pos_c = np.clip(pos, 0, zshape - 2)
     i = np.arange(xshape)[:, None]
     j = np.arange(yshape)
     z1 = ref[pos_c, i, j]
@@ -125,9 +128,13 @@ def echo_top(
     interp = w1 * h2 + (1 - w1) * h1
     hlast = distance * sin_e[-1] + r2 + radarheight
     return np.where(
-        ~above.any(axis=0),
+        pos < 0,
         0,
-        np.where(above[-1], hlast, np.where(pos == 0, h0, interp)),
+        np.where(
+            bits >= np.uint64(1) << np.uint64(zshape - 1),
+            hlast,
+            np.where(pos == 0, h0, interp),
+        ),
     )
 
 
