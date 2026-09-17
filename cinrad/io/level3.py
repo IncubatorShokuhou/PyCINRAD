@@ -1057,6 +1057,11 @@ class StandardPUP(RadarBase):
         return self._dataset
 
 
+def _moc_geo_axis(edge, n, reso):
+    # n 个格点覆盖半开区间 [edge, edge + n * reso)
+    return edge + np.arange(n) * reso
+
+
 class MocMosaic(RadarBase):
     """
     解析中国气象局探测中心-天气雷达拼图系统V3.0-产品
@@ -1139,17 +1144,13 @@ class MocMosaic(RadarBase):
                 out_data.append(out)
                 heights.append(int(height))
             if idx == 0:
-                edge_s, edge_w, edge_n, edge_e = (
-                    block_header["edge_s"][0] / 1000,
-                    block_header["edge_w"][0] / 1000,
-                    block_header["edge_n"][0] / 1000,
-                    block_header["edge_e"][0] / 1000,
-                )
-                self.lon = np.linspace(edge_w, edge_e, nx)
-                self.lat = np.linspace(edge_s, edge_n, ny)
+                edge_s = block_header["edge_s"][0] / 1000
+                edge_w = block_header["edge_w"][0] / 1000
                 self.range = block_header["range"][0]
                 self.scale = block_header["scale"][0]
                 dx, dy = (block_header["dx"][0] / 1000, block_header["dy"][0] / 1000)
+                self.lon = _moc_geo_axis(edge_w, nx, dx)
+                self.lat = _moc_geo_axis(edge_s, ny, dy)
                 self.reso = min(dx, dy)
                 self.dtype = self.decode(block_header["varname"][0])
                 if nx != 0 and ny != 0:
@@ -1203,14 +1204,11 @@ class MocMosaic(RadarBase):
             header["minute"][0],
         )
         self.time_zone = "bjt" if header["time_zone"][0] == 28800 else "utc"
-        edge_s, edge_w, edge_n, edge_e = (
-            header["edge_s"][0] / 1000,
-            header["edge_w"][0] / 1000,
-            header["edge_n"][0] / 1000,
-            header["edge_e"][0] / 1000,
-        )
-        self.lon = np.linspace(edge_w, edge_e, nx)
-        self.lat = np.linspace(edge_s, edge_n, ny)
+        edge_s = header["edge_s"][0] / 1000
+        edge_w = header["edge_w"][0] / 1000
+        dx, dy = header["dx"][0] / 1000, header["dy"][0] / 1000
+        self.lon = _moc_geo_axis(edge_w, nx, dx)
+        self.lat = _moc_geo_axis(edge_s, ny, dy)
         databody = self.f.read()
         if compress == 0:
             databody = databody
